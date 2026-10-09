@@ -1648,6 +1648,10 @@ var K_WIND = "wind:account";
 var K_LOCK = "rebuild:lock";
 var COOKIE = "om_session";
 var DEFAULT_SUB = "sub";
+var basePath = "";
+function setBasePath(p2) {
+  basePath = p2 || "";
+}
 var TTL_MS = 4 * 3600 * 1e3;
 var SKEW_MS = 10 * 60 * 1e3;
 var json = (o, s = 200) => new Response(JSON.stringify(o), {
@@ -1736,8 +1740,12 @@ async function ensureConfig(env2) {
 var src_default = {
   async fetch(req, env2) {
     const url = new URL(req.url);
-    const path = url.pathname.replace(/\/+$/, "") || "/";
-    const ip = req.headers.get("cf-connecting-ip") || "unknown";
+    const rawPath = url.pathname.replace(/\/+$/, "") || "/";
+    let path = rawPath;
+    if (basePath && (rawPath === basePath || rawPath.startsWith(basePath + "/"))) {
+      path = rawPath.slice(basePath.length) || "/";
+    }
+    const ip = req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "unknown";
     if (!env2 || !env2.KV) return html(renderNoKV(), 500);
     const cred = await env2.KV.get(K_CRED, "json");
     const authed = cred && await verifyToken(cred, readCookie(req, COOKIE));
@@ -1885,7 +1893,7 @@ var src_default = {
       }
       return html(renderUI(
         state,
-        url.host,
+        url.host + basePath,
         subPath,
         token,
         cred,
@@ -1973,6 +1981,7 @@ var src_default = {
 };
 
 // supabase_entry.js
+setBasePath("/functions/v1/worker");
 var SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 var SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY");
 if (!SUPABASE_URL || !SERVICE_KEY) {
